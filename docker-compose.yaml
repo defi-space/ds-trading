@@ -1,0 +1,54 @@
+name: daydreams
+
+networks:
+  agent-network:
+    driver: bridge
+
+services:
+  chroma:
+    image: chromadb/chroma:0.6.3
+    container_name: ${COMPOSE_PROJECT_NAME:-daydreams}_chroma
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    networks:
+      - agent-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # Agent service configuration
+  # Uncomment this service to run agents in a container
+  # # For local development, running agents directly on the host is recommended
+  # agents:
+  #   build:
+  #     context: .
+  #     dockerfile: phala/Dockerfile
+  #   container_name: ${COMPOSE_PROJECT_NAME:-daydreams}_agents
+  #   restart: always
+  #   profiles: ["all", "agents"]  # Only starts when explicitly selected with --profile
+  #   depends_on:
+  #     chroma:
+  #       condition: service_healthy
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - CHROMA_HOST=${COMPOSE_PROJECT_NAME:-daydreams}_chroma
+  #     - CHROMA_PORT=8000
+  #   networks:
+  #     - agent-network
+  #   # Resource allocation
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 3G
+  #       reservations:
+  #         memory: 2G
+
+volumes:
+  chroma_data:
