@@ -1,5 +1,6 @@
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { createDreams, createContainer, LogLevel, type MemoryStore } from "@daydreamsai/core";
+import { createMcpExtension } from "@daydreamsai/mcp";
 import { createFirebaseMemoryStore } from "@daydreamsai/firebase";
 import { createChromaVectorStore } from "@daydreamsai/chromadb";
 import { autonomousCli, cli } from "../extensions";
@@ -37,6 +38,24 @@ export interface AgentConfig {
     clientEmail: string;
     privateKey: string;
   };
+}
+
+function getMCPConnectors() {
+  const connectors = [
+    {
+      id: "lunarcrush",
+      name: "LunarCrush",
+      transport: {
+        type: "sse" as const,
+        serverUrl: `https://lunarcrush.ai/sse?key=${process.env.LUNARCRUSH_API_KEY}`,
+        sseEndpoint: "/events",
+        messageEndpoint: "/messages",
+      },
+    },
+  ];
+
+  // LunarCrush MCP Connector
+  return createMcpExtension(connectors);
 }
 
 /**
@@ -123,13 +142,15 @@ export async function createAgent(config: AgentConfig) {
       throw new Error(`Failed to connect to Firebase for agent ${config.id}: ${errorMessage}`);
     }
 
+    const mcpConnectors = getMCPConnectors();
+
     // Configure agent settings
     const agentConfig = {
       id: config.id,
       logLevel: LogLevel.DEBUG,
       container: createContainer(),
       model,
-      extensions: [isManualMode() ? cli : autonomousCli],
+      extensions: [isManualMode() ? cli : autonomousCli, mcpConnectors],
       memory: {
         store: memoryStore,
         vector: createChromaVectorStore(collectionName, chromaDbUrl),
