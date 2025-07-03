@@ -10,6 +10,7 @@
         "@daydreamsai/defai": "workspace:vendored/defai",
         "@daydreamsai/firebase": "workspace:vendored/firebase",
         "@openrouter/ai-sdk-provider": "^0.7.2",
+        "bignumber.js": "^9.3.0",
         "dotenv": "^16.6.1",
         "starknet": "^6.24.1",
       },
