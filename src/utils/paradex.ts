@@ -174,7 +174,6 @@ export async function paradexLogin(): Promise<{ config: ParadexConfig; account: 
     address: accountData.address,
     privateKey: accountData.privateKey,
   };
-
   console.log(`Authenticating Paradex account ${account.address} on ${environment}`);
 
   try {
@@ -197,7 +196,7 @@ export async function authenticate(
     "PARADEX-STARKNET-ACCOUNT": account.address,
     "PARADEX-STARKNET-SIGNATURE": signature,
     "PARADEX-TIMESTAMP": timestamp.toString(),
-    "PARADEX-SIGNATURE-EXPIRATION": expiration.toString(),
+    //"PARADEX-SIGNATURE-EXPIRATION": expiration.toString(),
   };
 
   try {
