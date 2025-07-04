@@ -4,6 +4,8 @@
 import BigNumber from "bignumber.js";
 import type { ParadexAccount, ParadexConfig } from "../schema/paradex-types";
 import { ec, shortString, type TypedData, typedData as starkTypedData, constants } from "starknet";
+import { StarknetConfigStore } from "../agents/utils";
+import { getCurrentAgentId } from "./starknet";
 
 interface AuthRequest extends Record<string, unknown> {
   method: string;
@@ -41,43 +43,55 @@ type ParadexEnvironment = keyof typeof PARADEX_ENVIRONMENTS;
 //
 
 /**
- * Validates required environment variables and returns configuration
- * @throws {Error} If required environment variables are missing
+ * Determines the Paradex environment based on the Starknet RPC URL
+ * @param rpcUrl The Starknet RPC URL
+ * @returns The corresponding Paradex environment
  */
-function validateEnvironmentVariables(): {
+function getEnvironmentFromRpcUrl(rpcUrl: string): ParadexEnvironment {
+  if (rpcUrl.includes("sepolia") || rpcUrl.includes("testnet")) {
+    return "TESTNET";
+  }
+  if (rpcUrl.includes("mainnet")) {
+    return "MAINNET";
+  }
+  // Default to testnet for safety
+  console.warn(`Could not determine environment from RPC URL: ${rpcUrl}. Defaulting to TESTNET.`);
+  return "TESTNET";
+}
+
+/**
+ * Gets agent configuration and validates it
+ * @throws {Error} If agent configuration is missing or invalid
+ */
+function getAgentConfiguration(): {
   environment: ParadexEnvironment;
   account: {
     address: string;
     privateKey: string;
   };
 } {
-  const requiredEnvVars = {
-    PARADEX_ENVIRONMENT: process.env.PARADEX_ENVIRONMENT,
-    PARADEX_ACCOUNT_ADDRESS: process.env.PARADEX_ACCOUNT_ADDRESS,
-    PARADEX_PRIVATE_KEY: process.env.PARADEX_PRIVATE_KEY,
-  };
-
-  const missingVars = Object.entries(requiredEnvVars)
-    .filter(([_, value]) => !value)
-    .map(([key]) => key);
-
-  if (missingVars.length > 0) {
+  const currentAgentId = getCurrentAgentId();
+  const agentConfig = StarknetConfigStore.getInstance().getConfig(currentAgentId);
+  
+  if (!agentConfig) {
     throw new Error(
-      `Missing required environment variables: ${missingVars.join(", ")}\nPlease ensure these are set in your .env file:\n- PARADEX_ENVIRONMENT: 'TESTNET' or 'MAINNET'\n- PARADEX_ACCOUNT_ADDRESS: Your Starknet account address\n- PARADEX_PRIVATE_KEY: Your private key (keep this secure!)`
+      `No configuration found for agent ${currentAgentId}. Please ensure the agent is properly initialized with Starknet configuration.`
     );
   }
 
-  const environment = requiredEnvVars.PARADEX_ENVIRONMENT as ParadexEnvironment;
-
-  if (!PARADEX_ENVIRONMENTS[environment]) {
-    throw new Error(`Invalid PARADEX_ENVIRONMENT: ${environment}. Must be 'TESTNET' or 'MAINNET'`);
+  if (!agentConfig.address || !agentConfig.privateKey || !agentConfig.rpcUrl) {
+    throw new Error(
+      `Incomplete configuration for agent ${currentAgentId}. Required: address, privateKey, and rpcUrl.`
+    );
   }
+
+  const environment = getEnvironmentFromRpcUrl(agentConfig.rpcUrl);
 
   return {
     environment,
     account: {
-      address: requiredEnvVars.PARADEX_ACCOUNT_ADDRESS as string,
-      privateKey: requiredEnvVars.PARADEX_PRIVATE_KEY as string,
+      address: agentConfig.address,
+      privateKey: agentConfig.privateKey,
     },
   };
 }
@@ -146,7 +160,7 @@ function validateApiResponse(response: Response, operation: string): void {
 }
 
 export async function paradexLogin(): Promise<{ config: ParadexConfig; account: ParadexAccount }> {
-  const { environment, account: accountData } = validateEnvironmentVariables();
+  const { environment, account: accountData } = getAgentConfiguration();
   const envConfig = PARADEX_ENVIRONMENTS[environment];
 
   const config: ParadexConfig = {
