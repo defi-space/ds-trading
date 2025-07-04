@@ -196,7 +196,7 @@ export async function authenticate(
     "PARADEX-STARKNET-ACCOUNT": account.address,
     "PARADEX-STARKNET-SIGNATURE": signature,
     "PARADEX-TIMESTAMP": timestamp.toString(),
-    //"PARADEX-SIGNATURE-EXPIRATION": expiration.toString(),
+    "PARADEX-SIGNATURE-EXPIRATION": expiration.toString(),
   };
 
   try {
