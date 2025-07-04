@@ -17,7 +17,7 @@ ds-trading-agents is a multi-agent system designed for automated trading on the 
     - Position tracking
 - **Goal Management:** A flexible goal management system that allows agents to create, update, and delete long-term, medium-term, and short-term goals.
 - **Extensible Architecture:** Built on `@daydreamsai/core`, the system is highly extensible. It includes a command-line interface (CLI) for manual control and an autonomous mode for hands-off operation.
-- **Real-time Data:** Includes a "Message Correlation Protocol" (MCP) extension for connecting to real-time data feeds like LunarCrush.
+- **Real-time Data:** Includes a "Model Context Protocol" (MCP) extension for connecting to real-time data feeds like LunarCrush for asset context, price history, and market sentiment analysis.
 - **Configurable:** Uses environment variables for easy configuration of API keys, Starknet wallets, and other settings.
 
 ## Available Tools
@@ -39,6 +39,16 @@ The agents have access to a variety of tools for trading and goal management:
 -   **`setGoalPlan`**: Sets the complete goal planning structure for the agent.
 -   **`updateGoal`**: Updates the properties of a specific goal by its ID.
 -   **`deleteGoal`**: Removes a goal from the agent's goal list.
+
+### Market Intelligence Tools (LunarCrush Integration)
+
+The agents leverage LunarCrush API through Model Context Protocol (MCP) to gain comprehensive market intelligence:
+
+-   **Asset Context**: Detailed information about cryptocurrencies and tokens, including fundamental data and market metrics.
+-   **Price History**: Historical price data and trends to inform trading decisions and technical analysis.
+-   **Market Sentiment**: Real-time social sentiment analysis from various platforms to gauge market mood and potential price movements.
+-   **Token Analytics**: Overall market feeling and community sentiment about specific tokens to enhance trading strategies.
+-   **Social Data**: Aggregated social media mentions, engagement metrics, and influence scores for better market understanding.
 
 ## Getting Started
 
@@ -72,14 +82,14 @@ The agents have access to a variety of tools for trading and goal management:
 2.  **Edit the `.env` file:**
     Fill in the required environment variables in the `.env` file. This includes your API keys, Starknet wallet details, and other configuration options.
 
-    **Required:**
-    - `LUNARCRUSH_API_KEY`
-    - `FIREBASE_PROJECT_ID`
-    - `FIREBASE_CLIENT_EMAIL`
-    - `FIREBASE_PRIVATE_KEY`
-    - `AGENT1_STARKNET_ADDRESS`
-    - `AGENT1_STARKNET_PRIVATE_KEY`
-    - `AGENT1_GOOGLE_API_KEY`
+         **Required:**
+     - `LUNARCRUSH_API_KEY` - For market sentiment, price history, and asset context data
+     - `FIREBASE_PROJECT_ID` - Firebase project ID for persistent memory storage
+     - `FIREBASE_CLIENT_EMAIL` - Firebase service account email
+     - `FIREBASE_PRIVATE_KEY` - Firebase private key (base64 encoded)
+     - `AGENT1_STARKNET_ADDRESS` - Starknet wallet address for Agent 1
+     - `AGENT1_STARKNET_PRIVATE_KEY` - Starknet private key for Agent 1
+     - `AGENT1_GOOGLE_API_KEY` - Google AI Studio API key for Gemini 2.0 Flash
 
     **Optional (depending on which agents you run):**
     - `OPENROUTER_API_KEY` (for agents 2, 3, and 4)
