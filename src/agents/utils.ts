@@ -113,14 +113,6 @@ export function getGoogleApiKey(agentId: string, agentNumber: number): string {
 }
 
 /**
- * Gets the Phala worker ID if in Phala environment
- * @returns The Phala worker ID or undefined
- */
-export function getPhalaWorkerId(): string | undefined {
-  return process.env.PHALA_WORKER_ID;
-}
-
-/**
  * Gets the ChromaDB URL from environment variables or falls back to the default container
  * @returns The ChromaDB URL
  */
@@ -234,4 +226,68 @@ export function getFirebaseConfig() {
     clientEmail,
     privateKey: decodedKey,
   };
+}
+
+/**
+ * Validates all required environment variables for the agents
+ * @param agentNumber The agent number to validate for (optional, validates common vars if not provided)
+ * @throws Error if any required environment variable is missing
+ */
+export function validateEnvironmentVariables(agentNumber?: number): void {
+  const missing: string[] = [];
+
+  // Common required variables
+  if (!process.env.STARKNET_RPC_URL) {
+    missing.push("STARKNET_RPC_URL");
+  }
+
+  if (!process.env.LUNARCRUSH_API_KEY) {
+    missing.push("LUNARCRUSH_API_KEY");
+  }
+
+  if (!process.env.FB_PROJECT_ID) {
+    missing.push("FB_PROJECT_ID");
+  }
+
+  if (!process.env.FB_CLIENT_EMAIL) {
+    missing.push("FB_CLIENT_EMAIL");
+  }
+
+  if (!process.env.FB_PRIVATE_KEY) {
+    missing.push("FB_PRIVATE_KEY");
+  }
+
+  // Agent-specific validation
+  if (agentNumber) {
+    validateAgentNumber(agentNumber);
+
+    // Required for all agents
+    if (!process.env[`AGENT${agentNumber}_ADDRESS`]) {
+      missing.push(`AGENT${agentNumber}_ADDRESS`);
+    }
+
+    if (!process.env[`AGENT${agentNumber}_PRIVATE_KEY`]) {
+      missing.push(`AGENT${agentNumber}_PRIVATE_KEY`);
+    }
+
+    if (!process.env[`AGENT${agentNumber}_API_KEY`] && !process.env.GOOGLE_API_KEY) {
+      missing.push(`AGENT${agentNumber}_API_KEY or GOOGLE_API_KEY`);
+    }
+
+    // OpenRouter key required for agents 2-4
+    if (agentNumber > 1) {
+      if (
+        !process.env[`AGENT${agentNumber}_OPENROUTER_API_KEY`] &&
+        !process.env.OPENROUTER_API_KEY
+      ) {
+        missing.push(`AGENT${agentNumber}_OPENROUTER_API_KEY or OPENROUTER_API_KEY`);
+      }
+    }
+  }
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing required environment variables: ${missing.join(", ")}. Please check your .env file and ensure all required variables are set. You can use .env.example as a template.`
+    );
+  }
 }

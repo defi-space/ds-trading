@@ -72,7 +72,7 @@ function getAgentConfiguration(): {
 } {
   const currentAgentId = getCurrentAgentId();
   const agentConfig = StarknetConfigStore.getInstance().getConfig(currentAgentId);
-  
+
   if (!agentConfig) {
     throw new Error(
       `No configuration found for agent ${currentAgentId}. Please ensure the agent is properly initialized with Starknet configuration.`

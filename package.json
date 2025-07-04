@@ -1,5 +1,5 @@
 {
-  "name": "ds-agents",
+  "name": "ds-trading-agents",
   "module": "src/run-agents.ts",
   "type": "module",
   "scripts": {
@@ -8,6 +8,7 @@
     "start-2": "bun run src/run-agents.ts 2",
     "start-3": "bun run src/run-agents.ts 3",
     "start-4": "bun run src/run-agents.ts 4",
+    "test": "bun run src/run-agents.ts 1",
     "lint": "biome lint src/",
     "lint:fix": "biome lint --write src/",
     "format": "biome format --write src/",

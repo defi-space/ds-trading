@@ -1,4 +1,5 @@
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createDreams, createContainer, LogLevel, type MemoryStore } from "@daydreamsai/core";
 import { createMcpExtension } from "@daydreamsai/mcp";
 import { createFirebaseMemoryStore } from "@daydreamsai/firebase";
@@ -17,6 +18,8 @@ import {
   getChromaDbUrl,
   getFirebaseConfig,
   getCollectionName,
+  getGoogleApiKey,
+  validateEnvironmentVariables,
 } from "./utils";
 
 // Load environment variables
@@ -41,13 +44,21 @@ export interface AgentConfig {
 }
 
 function getMCPConnectors() {
+  // Validate that LunarCrush API key is present
+  const lunarCrushApiKey = process.env.LUNARCRUSH_API_KEY;
+  if (!lunarCrushApiKey) {
+    throw new Error(
+      "LUNARCRUSH_API_KEY is required but not set in environment variables. Please set it in your .env file."
+    );
+  }
+
   const connectors = [
     {
       id: "lunarcrush",
       name: "LunarCrush",
       transport: {
         type: "sse" as const,
-        serverUrl: `https://lunarcrush.ai/sse?key=${process.env.LUNARCRUSH_API_KEY}`,
+        serverUrl: `https://lunarcrush.ai/sse?key=${lunarCrushApiKey}`,
         sseEndpoint: "/events",
         messageEndpoint: "/messages",
       },
@@ -59,37 +70,51 @@ function getMCPConnectors() {
 }
 
 /**
- * Creates the appropriate model based on agent number using OpenRouter
+ * Creates the appropriate model based on agent number
+ * Agent 1 uses Google AI SDK directly, others use OpenRouter
  * @param agentNumber The agent number (1-4)
  * @param config The agent configuration
  * @returns The model instance
  */
 function createModelForAgent(agentNumber: number, config: AgentConfig) {
-  const openrouterApiKey = config.openrouterApiKey || process.env.OPENROUTER_API_KEY;
-  if (!openrouterApiKey) {
-    throw new Error("OpenRouter API key is required");
-  }
-
-  const openrouter = createOpenRouter({
-    apiKey: openrouterApiKey,
-  });
-
   switch (agentNumber) {
     case 1: {
-      // Agent 1: Google Gemini 2.0 Flash via OpenRouter
-      return openrouter("google/gemini-2.0-flash-001");
+      // Agent 1: Google Gemini 2.0 Flash via Google AI SDK directly
+      const googleApiKey = getGoogleApiKey(config.id, agentNumber);
+      const google = createGoogleGenerativeAI({
+        apiKey: googleApiKey,
+      });
+      return google("gemini-2.0-flash");
     }
-    case 2: {
-      // Agent 2: xAI Grok Beta via OpenRouter
-      return openrouter("x-ai/grok-3-mini");
-    }
-    case 3: {
-      // Agent 3: OpenAI GPT-4o Mini via OpenRouter
-      return openrouter("openai/gpt-4.1-mini");
-    }
+    case 2:
+    case 3:
     case 4: {
-      // Agent 4: Anthropic Claude 3.5 Haiku via OpenRouter
-      return openrouter("anthropic/claude-3.5-haiku");
+      // Other agents: Use OpenRouter
+      const openrouterApiKey = config.openrouterApiKey || process.env.OPENROUTER_API_KEY;
+      if (!openrouterApiKey) {
+        throw new Error("OpenRouter API key is required for agents 2-4");
+      }
+
+      const openrouter = createOpenRouter({
+        apiKey: openrouterApiKey,
+      });
+
+      switch (agentNumber) {
+        case 2: {
+          // Agent 2: xAI Grok Beta via OpenRouter
+          return openrouter("x-ai/grok-3-mini");
+        }
+        case 3: {
+          // Agent 3: OpenAI GPT-4.1 Mini via OpenRouter
+          return openrouter("openai/gpt-4.1-mini");
+        }
+        case 4: {
+          // Agent 4: Anthropic Claude 3.5 Haiku via OpenRouter
+          return openrouter("anthropic/claude-3.5-haiku");
+        }
+        default:
+          throw new Error(`Unsupported agent number: ${agentNumber}`);
+      }
     }
     default:
       throw new Error(`Unsupported agent number: ${agentNumber}`);
@@ -180,8 +205,9 @@ export async function createAgent(config: AgentConfig) {
  * @returns The created agent instance
  */
 export async function createAndStartAgent(agentNumber: number) {
-  // Validate agent number
+  // Validate agent number and environment variables first
   validateAgentNumber(agentNumber);
+  validateEnvironmentVariables(agentNumber);
 
   // Set the current agent ID for Starknet operations
   const AGENT_ID = getAgentId(agentNumber);
