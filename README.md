@@ -1,6 +1,6 @@
-# DS-Agents: Autonomous Trading Agents for Paradex
+# ds-trading-agents: Autonomous Trading Agents for Paradex
 
-DS-Agents is a multi-agent system designed for automated trading on the Paradex platform. It allows you to run up to four autonomous agents, each powered by a different large language model (LLM), to execute trading strategies, manage goals, and interact with the Paradex API.
+ds-trading-agents is a multi-agent system designed for automated trading on the Paradex platform. It allows you to run up to four autonomous agents, each powered by a different large language model (LLM), to execute trading strategies, manage goals, and interact with the Paradex API.
 
 ## Features
 
