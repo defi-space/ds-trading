@@ -28,11 +28,11 @@ const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const PARADEX_ENVIRONMENTS = {
   TESTNET: {
     apiBaseUrl: "https://api.testnet.paradex.trade/v1",
-    chainId: constants.StarknetChainId.SN_SEPOLIA,
+    chainId: "PRIVATE_SN_POTC_SEPOLIA",
   },
   MAINNET: {
     apiBaseUrl: "https://api.prod.paradex.trade/v1",
-    chainId: constants.StarknetChainId.SN_MAIN,
+    chainId: "PRIVATE_SN_PARACLEAR_MAINNET",
   },
 } as const;
 
