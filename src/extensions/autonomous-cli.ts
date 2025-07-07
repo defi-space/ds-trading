@@ -164,8 +164,8 @@ export const autonomousCli = extension({
         );
 
         // Define intervals for different operations
-        const executionInterval = 10 * 60 * 1000; // 10 minutes
-        const updateInterval = 60 * 60 * 1000; // 1 hour
+        const executionInterval = 5 * 60 * 1000; // 5 minutes
+        const updateInterval = 30 * 60 * 1000; // 30 minutes
 
         // Set up separate timers for execution and updates
         setTimeout(() => {

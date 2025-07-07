@@ -84,7 +84,7 @@ function createModelForAgent(agentNumber: number, config: AgentConfig) {
       const google = createGoogleGenerativeAI({
         apiKey: googleApiKey,
       });
-      return google("gemini-2.0-flash");
+      return google("gemini-2.5-flash");
     }
     case 2:
     case 3:
