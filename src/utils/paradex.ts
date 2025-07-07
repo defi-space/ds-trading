@@ -2,17 +2,18 @@
 // https://github.com/tradeparadex/code-samples/tree/main/typescript
 
 import BigNumber from "bignumber.js";
-import type { ParadexAccount, ParadexConfig } from "../schema/paradex-types";
+import type { Account, SystemConfig, UnixTime } from "../schema/paradex-types";
 import { ec, shortString, type TypedData, typedData as starkTypedData, constants } from "starknet";
 import { StarknetConfigStore } from "../agents/utils";
 import { getCurrentAgentId } from "./starknet";
+import { getUnixTime } from "date-fns";
 
 interface AuthRequest extends Record<string, unknown> {
   method: string;
   path: string;
   body: string;
-  timestamp: number;
-  expiration: number;
+  timestamp: UnixTime;
+  expiration: UnixTime;
 }
 
 const DOMAIN_TYPES = {
@@ -159,18 +160,18 @@ function validateApiResponse(response: Response, operation: string): void {
   }
 }
 
-export async function paradexLogin(): Promise<{ config: ParadexConfig; account: ParadexAccount }> {
+export async function paradexLogin(): Promise<{ config: SystemConfig; account: Account }> {
   const { environment, account: accountData } = getAgentConfiguration();
   const envConfig = PARADEX_ENVIRONMENTS[environment];
 
-  const config: ParadexConfig = {
+  const config: SystemConfig = {
     apiBaseUrl: envConfig.apiBaseUrl,
     starknet: {
       chainId: shortString.encodeShortString(envConfig.chainId),
     },
   };
 
-  const account: ParadexAccount = {
+  const account: Account = {
     address: accountData.address,
     privateKey: accountData.privateKey,
   };
@@ -187,8 +188,8 @@ export async function paradexLogin(): Promise<{ config: ParadexConfig; account: 
 }
 
 export async function authenticate(
-  config: ParadexConfig,
-  account: ParadexAccount
+  config: SystemConfig,
+  account: Account
 ): Promise<string> {
   const { signature, timestamp, expiration } = signAuthRequest(config, account);
   const headers = {
@@ -224,7 +225,7 @@ export async function authenticate(
 }
 
 // https://docs.paradex.trade/api-reference/prod/account/get
-export async function getAccountInfo(config: ParadexConfig, account: ParadexAccount): Promise<any> {
+export async function getAccountInfo(config: SystemConfig, account: Account): Promise<any> {
   if (!account.jwtToken) {
     throw new Error("Account not authenticated. Call paradexLogin() first.");
   }
@@ -253,7 +254,7 @@ export async function getAccountInfo(config: ParadexConfig, account: ParadexAcco
 }
 
 // https://docs.paradex.trade/api-reference/prod/markets/get-markets
-export async function listAvailableMarkets(config: ParadexConfig, market?: string): Promise<any[]> {
+export async function listAvailableMarkets(config: SystemConfig, market?: string): Promise<any[]> {
   const headers = {
     Accept: "application/json",
   };
@@ -286,7 +287,7 @@ export async function listAvailableMarkets(config: ParadexConfig, market?: strin
 }
 
 // https://docs.paradex.trade/api-reference/prod/account/get-positions
-export async function getPositions(config: ParadexConfig, account: ParadexAccount): Promise<any[]> {
+export async function getPositions(config: SystemConfig, account: Account): Promise<any[]> {
   if (!account.jwtToken) {
     throw new Error("Account not authenticated. Call paradexLogin() first.");
   }
@@ -321,8 +322,8 @@ export async function getPositions(config: ParadexConfig, account: ParadexAccoun
 
 // https://docs.paradex.trade/api-reference/prod/orders/get-open-orders
 export async function getOpenOrders(
-  config: ParadexConfig,
-  account: ParadexAccount
+  config: SystemConfig,
+  account: Account
 ): Promise<any[]> {
   if (!account.jwtToken) {
     throw new Error("Account not authenticated. Call paradexLogin() first.");
@@ -358,8 +359,8 @@ export async function getOpenOrders(
 
 // https://docs.paradex.trade/api-reference/prod/orders/new
 export async function openOrder(
-  config: ParadexConfig,
-  account: ParadexAccount,
+  config: SystemConfig,
+  account: Account,
   orderDetails: Record<string, string>
 ): Promise<any> {
   if (!account.jwtToken) {
@@ -410,8 +411,8 @@ export async function openOrder(
 
 // https://docs.paradex.trade/api-reference/prod/orders/cancel
 export async function cancelOrder(
-  config: ParadexConfig,
-  account: ParadexAccount,
+  config: SystemConfig,
+  account: Account,
   orderId: string
 ): Promise<boolean> {
   if (!account.jwtToken) {
@@ -450,25 +451,25 @@ export async function cancelOrder(
 
 // Utility function to generate current and expiration timestamps
 function generateTimestamps(): {
-  timestamp: number;
-  expiration: number;
+  timestamp: UnixTime;
+  expiration: UnixTime;
 } {
   const dateNow = new Date();
   const dateExpiration = new Date(dateNow.getTime() + SEVEN_DAYS_MS);
 
   return {
-    timestamp: Math.floor(dateNow.getTime() / 1000),
-    expiration: Math.floor(dateExpiration.getTime() / 1000),
+    timestamp: getUnixTime(dateNow),
+    expiration: getUnixTime(dateExpiration),
   };
 }
 
 function signAuthRequest(
-  config: ParadexConfig,
-  account: ParadexAccount
+  config: SystemConfig,
+  account: Account
 ): {
   signature: string;
-  timestamp: number;
-  expiration: number;
+  timestamp: UnixTime;
+  expiration: UnixTime;
 } {
   const { timestamp, expiration } = generateTimestamps();
 
@@ -487,10 +488,10 @@ function signAuthRequest(
 }
 
 function signOrder(
-  config: ParadexConfig,
-  account: ParadexAccount,
+  config: SystemConfig,
+  account: Account,
   orderDetails: Record<string, string>,
-  timestamp: number
+  timestamp: UnixTime
 ): string {
   const sideForSigning = orderDetails.side === "BUY" ? "1" : "2";
 
@@ -561,7 +562,7 @@ function buildParadexDomain(starknetChainId: string) {
   };
 }
 
-function signatureFromTypedData(account: ParadexAccount, typedData: TypedData) {
+function signatureFromTypedData(account: Account, typedData: TypedData) {
   const msgHash = starkTypedData.getMessageHash(typedData, account.address);
   const { r, s } = ec.starkCurve.sign(msgHash, account.privateKey);
   return JSON.stringify([r.toString(), s.toString()]);

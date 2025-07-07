@@ -25,10 +25,11 @@
     "@daydreamsai/chromadb": "workspace:vendored/chroma",
     "@daydreamsai/core": "workspace:vendored/core",
     "@daydreamsai/defai": "workspace:vendored/defai",
-    "@daydreamsai/mcp": "workspace:vendored/mcp",
     "@daydreamsai/firebase": "workspace:vendored/firebase",
+    "@daydreamsai/mcp": "workspace:vendored/mcp",
     "@openrouter/ai-sdk-provider": "^0.7.2",
     "bignumber.js": "^9.3.0",
+    "date-fns": "^4.1.0",
     "dotenv": "^16.6.1",
     "starknet": "^6.24.1"
   }
