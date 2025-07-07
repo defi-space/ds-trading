@@ -279,7 +279,7 @@ export async function authenticate(config: SystemConfig, account: Account): Prom
   }
 }
 
-// https://docs.paradex.trade/api-reference/prod/account/get-info
+// https://docs.paradex.trade/api-reference/prod/account
 export async function getAccountInfo(config: SystemConfig, account: Account): Promise<AccountInfo> {
   if (!account.jwtToken) {
     throw new Error("Account not authenticated. Call paradexLogin() first.");
@@ -291,7 +291,7 @@ export async function getAccountInfo(config: SystemConfig, account: Account): Pr
   };
 
   try {
-    const response = await fetch(`${config.apiBaseUrl}/account/info`, {
+    const response = await fetch(`${config.apiBaseUrl}/account`, {
       method: "GET",
       headers,
     });
