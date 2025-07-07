@@ -2,7 +2,21 @@
 // https://github.com/tradeparadex/code-samples/tree/main/typescript
 
 import BigNumber from "bignumber.js";
-import type { Account, SystemConfig, UnixTime } from "../schema/paradex-types";
+import type {
+  Account,
+  SystemConfig,
+  UnixTime,
+  AccountInfo,
+  Market,
+  Position,
+  Order,
+  Fill,
+  OrderBook,
+  MarketStats,
+  FundingPayment,
+  OrderRequest,
+  OrderModification,
+} from "../schema/paradex-types";
 import { ec, shortString, type TypedData, typedData as starkTypedData, constants } from "starknet";
 import { StarknetConfigStore } from "../agents/utils";
 import { getCurrentAgentId } from "./starknet";
@@ -118,9 +132,9 @@ function validateNumericInput(value: string, fieldName: string): void {
 }
 
 /**
- * Validates order parameters
+ * Validates order parameters with enhanced support for advanced order types
  */
-function validateOrderParameters(orderDetails: Record<string, string>): void {
+function validateOrderParameters(orderDetails: OrderRequest): void {
   if (!orderDetails.market) {
     throw new Error("Market symbol is required");
   }
@@ -129,14 +143,58 @@ function validateOrderParameters(orderDetails: Record<string, string>): void {
     throw new Error("Side must be either 'BUY' or 'SELL'");
   }
 
-  if (!orderDetails.type || !["MARKET", "LIMIT"].includes(orderDetails.type)) {
-    throw new Error("Type must be either 'MARKET' or 'LIMIT'");
+  if (
+    !orderDetails.type ||
+    !["MARKET", "LIMIT", "STOP", "STOP_LIMIT"].includes(orderDetails.type)
+  ) {
+    throw new Error("Type must be one of: 'MARKET', 'LIMIT', 'STOP', 'STOP_LIMIT'");
   }
 
   validateNumericInput(orderDetails.size, "Size");
 
-  if (orderDetails.type === "LIMIT") {
+  if (orderDetails.type === "LIMIT" || orderDetails.type === "STOP_LIMIT") {
+    if (!orderDetails.price) {
+      throw new Error("Price is required for LIMIT and STOP_LIMIT orders");
+    }
     validateNumericInput(orderDetails.price, "Price");
+  }
+
+  if (orderDetails.type === "STOP" || orderDetails.type === "STOP_LIMIT") {
+    if (!orderDetails.trigger_price) {
+      throw new Error("Trigger price is required for STOP and STOP_LIMIT orders");
+    }
+    validateNumericInput(orderDetails.trigger_price, "Trigger price");
+  }
+
+  // Validate instruction if provided
+  if (
+    orderDetails.instruction &&
+    !["GTC", "POST_ONLY", "IOC", "RPI"].includes(orderDetails.instruction)
+  ) {
+    throw new Error("Instruction must be one of: 'GTC', 'POST_ONLY', 'IOC', 'RPI'");
+  }
+
+  // Validate flags if provided
+  if (orderDetails.flags && Array.isArray(orderDetails.flags)) {
+    const validFlags = [
+      "REDUCE_ONLY",
+      "STOP_CONDITION_BELOW_TRIGGER",
+      "STOP_CONDITION_ABOVE_TRIGGER",
+      "INTERACTIVE",
+    ];
+    for (const flag of orderDetails.flags) {
+      if (!validFlags.includes(flag)) {
+        throw new Error(`Invalid flag: ${flag}. Valid flags are: ${validFlags.join(", ")}`);
+      }
+    }
+  }
+
+  // Validate STP (Self Trade Prevention) if provided
+  if (
+    orderDetails.stp &&
+    !["EXPIRE_MAKER", "EXPIRE_TAKER", "EXPIRE_BOTH"].includes(orderDetails.stp)
+  ) {
+    throw new Error("STP must be one of: 'EXPIRE_MAKER', 'EXPIRE_TAKER', 'EXPIRE_BOTH'");
   }
 }
 
@@ -187,10 +245,7 @@ export async function paradexLogin(): Promise<{ config: SystemConfig; account: A
   }
 }
 
-export async function authenticate(
-  config: SystemConfig,
-  account: Account
-): Promise<string> {
+export async function authenticate(config: SystemConfig, account: Account): Promise<string> {
   const { signature, timestamp, expiration } = signAuthRequest(config, account);
   const headers = {
     Accept: "application/json",
@@ -224,8 +279,8 @@ export async function authenticate(
   }
 }
 
-// https://docs.paradex.trade/api-reference/prod/account/get
-export async function getAccountInfo(config: SystemConfig, account: Account): Promise<any> {
+// https://docs.paradex.trade/api-reference/prod/account/get-info
+export async function getAccountInfo(config: SystemConfig, account: Account): Promise<AccountInfo> {
   if (!account.jwtToken) {
     throw new Error("Account not authenticated. Call paradexLogin() first.");
   }
@@ -236,7 +291,7 @@ export async function getAccountInfo(config: SystemConfig, account: Account): Pr
   };
 
   try {
-    const response = await fetch(`${config.apiBaseUrl}/account`, {
+    const response = await fetch(`${config.apiBaseUrl}/account/info`, {
       method: "GET",
       headers,
     });
@@ -253,8 +308,11 @@ export async function getAccountInfo(config: SystemConfig, account: Account): Pr
   }
 }
 
-// https://docs.paradex.trade/api-reference/prod/markets/get-markets
-export async function listAvailableMarkets(config: SystemConfig, market?: string): Promise<any[]> {
+// https://docs.paradex.trade/api/prod/markets/get-markets
+export async function listAvailableMarkets(
+  config: SystemConfig,
+  market?: string
+): Promise<Market[]> {
   const headers = {
     Accept: "application/json",
   };
@@ -274,7 +332,7 @@ export async function listAvailableMarkets(config: SystemConfig, market?: string
     const data = await response.json();
 
     if (!data.results || !Array.isArray(data.results)) {
-      throw new Error("Invalid response format: missing or invalid results array");
+      throw new Error("Invalid response format: expected {results: [...]} structure");
     }
 
     return data.results;
@@ -287,7 +345,7 @@ export async function listAvailableMarkets(config: SystemConfig, market?: string
 }
 
 // https://docs.paradex.trade/api-reference/prod/account/get-positions
-export async function getPositions(config: SystemConfig, account: Account): Promise<any[]> {
+export async function getPositions(config: SystemConfig, account: Account): Promise<Position[]> {
   if (!account.jwtToken) {
     throw new Error("Account not authenticated. Call paradexLogin() first.");
   }
@@ -321,10 +379,7 @@ export async function getPositions(config: SystemConfig, account: Account): Prom
 }
 
 // https://docs.paradex.trade/api-reference/prod/orders/get-open-orders
-export async function getOpenOrders(
-  config: SystemConfig,
-  account: Account
-): Promise<any[]> {
+export async function getOpenOrders(config: SystemConfig, account: Account): Promise<Order[]> {
   if (!account.jwtToken) {
     throw new Error("Account not authenticated. Call paradexLogin() first.");
   }
@@ -361,8 +416,8 @@ export async function getOpenOrders(
 export async function openOrder(
   config: SystemConfig,
   account: Account,
-  orderDetails: Record<string, string>
-): Promise<any> {
+  orderDetails: OrderRequest
+): Promise<unknown> {
   if (!account.jwtToken) {
     throw new Error("Account not authenticated. Call paradexLogin() first.");
   }
@@ -371,7 +426,7 @@ export async function openOrder(
   validateOrderParameters(orderDetails);
 
   const timestamp = Date.now();
-  const signature = signOrder(config, account, orderDetails, timestamp);
+  const signature = signOrder(config, account, orderDetails as Record<string, string>, timestamp);
 
   const inputBody = JSON.stringify({
     ...orderDetails,
@@ -445,6 +500,226 @@ export async function cancelOrder(
   }
 }
 
+// https://docs.paradex.trade/api-reference/prod/orders/modify
+export async function modifyOrder(
+  config: SystemConfig,
+  account: Account,
+  orderId: string,
+  updates: OrderModification
+): Promise<unknown> {
+  if (!account.jwtToken) {
+    throw new Error("Account not authenticated. Call paradexLogin() first.");
+  }
+
+  if (!orderId || typeof orderId !== "string") {
+    throw new Error("Valid order ID is required");
+  }
+
+  // Validate update parameters
+  if (updates.price) {
+    validateNumericInput(updates.price, "Price");
+  }
+  if (updates.size) {
+    validateNumericInput(updates.size, "Size");
+  }
+  if (updates.trigger_price) {
+    validateNumericInput(updates.trigger_price, "Trigger price");
+  }
+
+  const timestamp = Date.now();
+
+  // Sign the modification request
+  const modifyData = {
+    ...updates,
+    timestamp: timestamp,
+  };
+
+  const inputBody = JSON.stringify({
+    ...modifyData,
+    signature_timestamp: timestamp,
+  });
+
+  const headers = {
+    Accept: "application/json",
+    Authorization: `Bearer ${account.jwtToken}`,
+    "Content-Type": "application/json",
+  };
+
+  try {
+    const response = await fetch(`${config.apiBaseUrl}/orders/${encodeURIComponent(orderId)}`, {
+      method: "PUT",
+      headers,
+      body: inputBody,
+    });
+
+    validateApiResponse(response, "Modify order");
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error(`Failed to modify order: ${error}`);
+  }
+}
+
+// https://docs.paradex.trade/api/prod/markets/get-orderbook
+export async function getOrderBook(
+  config: SystemConfig,
+  market: string,
+  depth?: number
+): Promise<OrderBook> {
+  const headers = {
+    Accept: "application/json",
+  };
+
+  try {
+    let url = `${config.apiBaseUrl}/orderbook/${encodeURIComponent(market)}`;
+    if (depth) {
+      url += `?depth=${depth}`;
+    }
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers,
+    });
+
+    validateApiResponse(response, "Get order book");
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error(`Failed to get order book: ${error}`);
+  }
+}
+
+// https://docs.paradex.trade/api-reference/prod/account/list-fills
+export async function getFills(
+  config: SystemConfig,
+  account: Account,
+  market?: string,
+  limit?: number
+): Promise<Fill[]> {
+  if (!account.jwtToken) {
+    throw new Error("Account not authenticated. Call paradexLogin() first.");
+  }
+
+  const headers = {
+    Accept: "application/json",
+    Authorization: `Bearer ${account.jwtToken}`,
+  };
+
+  try {
+    let url = `${config.apiBaseUrl}/fills`;
+    const params = new URLSearchParams();
+
+    if (market) {
+      params.append("market", market);
+    }
+    if (limit) {
+      params.append("page_size", limit.toString());
+    }
+
+    if (params.toString()) {
+      url += `?${params.toString()}`;
+    }
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers,
+    });
+
+    validateApiResponse(response, "Get fills");
+
+    const data = await response.json();
+
+    if (!data.results || !Array.isArray(data.results)) {
+      throw new Error("Invalid response format: missing or invalid results array");
+    }
+
+    return data.results;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error(`Failed to get fills: ${error}`);
+  }
+}
+
+// https://docs.paradex.trade/api/prod/markets/get-markets-summary
+export async function getMarketStats(config: SystemConfig, market?: string): Promise<MarketStats> {
+  const headers = {
+    Accept: "application/json",
+  };
+
+  try {
+    const marketParam = market || "ALL";
+    const url = `${config.apiBaseUrl}/markets/summary?market=${encodeURIComponent(marketParam)}`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers,
+    });
+
+    validateApiResponse(response, "Get market stats");
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error(`Failed to get market stats: ${error}`);
+  }
+}
+
+// https://docs.paradex.trade/api/prod/account/get-funding
+export async function getFundingPayments(
+  config: SystemConfig,
+  account: Account,
+  market: string,
+  limit?: number
+): Promise<FundingPayment> {
+  if (!account.jwtToken) {
+    throw new Error("Account not authenticated. Call paradexLogin() first.");
+  }
+
+  if (!market) {
+    throw new Error("Market parameter is required for funding payments");
+  }
+
+  const headers = {
+    Accept: "application/json",
+    Authorization: `Bearer ${account.jwtToken}`,
+  };
+
+  try {
+    let url = `${config.apiBaseUrl}/funding/payments?market=${encodeURIComponent(market)}`;
+    if (limit) {
+      url += `&page_size=${limit}`;
+    }
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers,
+    });
+
+    validateApiResponse(response, "Get funding payments");
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error(`Failed to get funding payments: ${error}`);
+  }
+}
+
 //
 // private
 //
@@ -476,7 +751,7 @@ function signAuthRequest(
   const request: AuthRequest = {
     method: "POST",
     path: "/v1/auth",
-    body: "", // Assuming no body is required for this request
+    body: "",
     timestamp,
     expiration,
   };
@@ -523,11 +798,11 @@ function buildAuthTypedData(message: Record<string, unknown>, starknetChainId: s
     types: {
       ...DOMAIN_TYPES,
       Request: [
-        { name: "method", type: "felt" }, // string
-        { name: "path", type: "felt" }, // string
-        { name: "body", type: "felt" }, // string
-        { name: "timestamp", type: "felt" }, // number
-        { name: "expiration", type: "felt" }, // number
+        { name: "method", type: "felt" },
+        { name: "path", type: "felt" },
+        { name: "body", type: "felt" },
+        { name: "timestamp", type: "felt" },
+        { name: "expiration", type: "felt" },
       ],
     },
     message,
@@ -542,12 +817,12 @@ function buildOrderTypedData(message: Record<string, unknown>, starknetChainId: 
     types: {
       ...DOMAIN_TYPES,
       Order: [
-        { name: "timestamp", type: "felt" }, // UnixTimeMs; Acts as a nonce
-        { name: "market", type: "felt" }, // 'BTC-USD-PERP'
-        { name: "side", type: "felt" }, // '1': 'BUY'; '2': 'SELL'
-        { name: "orderType", type: "felt" }, // 'LIMIT';  'MARKET'
-        { name: "size", type: "felt" }, // Quantum value
-        { name: "price", type: "felt" }, // Quantum value; '0' for Market order
+        { name: "timestamp", type: "felt" },
+        { name: "market", type: "felt" },
+        { name: "side", type: "felt" },
+        { name: "orderType", type: "felt" },
+        { name: "size", type: "felt" },
+        { name: "price", type: "felt" },
       ],
     },
     message,
